@@ -1,0 +1,8 @@
+# Runtime and peak memory: full benchmark plus development forwards, one GPU.
+model: llama
+benchmarks: [mmlu, arc]
+prompt: plain
+workload: runs/llama/workload
+responses: runs/llama/nvidia/responses
+precision: bf16
+output: runs/llama/amd/bf16/cost.json

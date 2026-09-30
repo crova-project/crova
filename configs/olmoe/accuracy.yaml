@@ -1,0 +1,7 @@
+# Multiple-choice accuracy on the complete test sets. Shard with
+# --set shard=0 --set num_shards=4 and combine with `crova accuracy-merge`.
+model: olmoe
+benchmarks: [mmlu, arc]
+prompt: plain
+precision: bf16
+output: runs/olmoe/amd/bf16/accuracy.json

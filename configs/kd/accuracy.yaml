@@ -1,0 +1,6 @@
+# Student accuracy (letter scoring); compare answers between students with
+# `crova kd-agreement`.
+model: runs/kd/students/nvidia-bf16-seed0/student
+benchmarks: [mmlu, arc]
+prompt: plain
+output: runs/kd/students/nvidia-bf16-seed0/accuracy.json

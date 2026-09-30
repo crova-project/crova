@@ -1,0 +1,10 @@
+# Multiple-choice accuracy on the complete test sets. Shard with
+# --set shard=0 --set num_shards=4 and combine with `crova accuracy-merge`.
+model: jais
+benchmarks: [mmlu, arabicmmlu]
+prompt: chat
+precision: bf16
+output: runs/jais/amd/bf16/accuracy.json
+
+# Accuracy is reported on all questions and on those outside the workload.
+exclude_workload: runs/jais/workload

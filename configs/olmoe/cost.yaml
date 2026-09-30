@@ -1,0 +1,8 @@
+# Runtime and peak memory: full benchmark plus development forwards, one GPU.
+model: olmoe
+benchmarks: [mmlu, arc]
+prompt: plain
+workload: runs/olmoe/workload
+responses: runs/olmoe/nvidia/responses
+precision: bf16
+output: runs/olmoe/amd/bf16/cost.json

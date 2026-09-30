@@ -1,0 +1,8 @@
+# Runtime and peak memory: full benchmark plus development forwards, one GPU.
+model: jais
+benchmarks: [mmlu, arabicmmlu]
+prompt: chat
+workload: runs/jais/workload
+responses: runs/jais/nvidia/responses
+precision: bf16
+output: runs/jais/amd/bf16/cost.json
