@@ -1,0 +1,11 @@
+model: qwenmoe
+output: runs/qwenmoe/workload
+benchmarks: [mmlu, arc]
+prompt: plain
+train_per_benchmark: 256
+development_per_benchmark: 64
+seed: 20260910
+# Draw the workload from non-test splits; accuracy uses the test sets.
+source_splits:
+  mmlu: [dev, validation]
+  arc: [train, validation]

@@ -1,0 +1,7 @@
+model: jais
+output: runs/jais/workload
+benchmarks: [mmlu, arabicmmlu]
+prompt: chat
+train_per_benchmark: 600
+development_per_benchmark: 100
+seed: 20260910
