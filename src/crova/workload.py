@@ -33,6 +33,11 @@ def _digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def question_key(row):
+    """Identity of the question text shown to the model (question and choices)."""
+    return _digest([row["category"], row["question"], row["choices"]])[:16]
+
+
 def _normalize(category, row):
     if category == "mmlu":
         choices, answer = list(row["choices"]), LETTERS[row["answer"]]

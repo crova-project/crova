@@ -19,7 +19,7 @@ import torch
 from . import io
 from .capture import mode_of
 from .models import environment, load_model, load_tokenizer
-from .workload import LETTERS, Workload, load_benchmark, render
+from .workload import LETTERS, Workload, load_benchmark, question_key, render
 
 CHOICE = re.compile(r"(?<![A-Za-z0-9])[A-E](?![A-Za-z0-9])")
 
@@ -66,6 +66,7 @@ def evaluate(config):
         predicted, finite = score(model, tokenizer, row, input_ids, config["prompt"],
                                   letters=letters, use_cache=mode_of(config) == "teacher_forced")
         rows.append({"case_id": row["case_id"], "category": row["category"],
+                     "question_key": question_key(row),
                      "predicted": predicted, "answer": row["answer"],
                      "correct": predicted == row["answer"], "parsed": predicted is not None,
                      "finite": finite})
@@ -79,13 +80,14 @@ def evaluate(config):
 
 def summarize(rows, exclude_workload=None):
     excluded = set()
-    if exclude_workload:
-        excluded = set(Workload(exclude_workload).cases)
+    if exclude_workload:  # match by question text, so duplicate test rows are excluded too
+        excluded = {question_key(row) for row in Workload(exclude_workload).cases.values()}
     summary = {}
     for category in sorted({r["category"] for r in rows}):
         groups = {"all": [r for r in rows if r["category"] == category]}
         if excluded:
-            groups["excluding_workload"] = [r for r in groups["all"] if r["case_id"] not in excluded]
+            groups["excluding_workload"] = [r for r in groups["all"]
+                                            if r["question_key"] not in excluded]
         summary[category] = {
             name: {"cases": len(g), "correct": sum(r["correct"] for r in g),
                    "accuracy": sum(r["correct"] for r in g) / len(g) if g else None,

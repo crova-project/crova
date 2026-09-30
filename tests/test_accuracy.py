@@ -39,9 +39,13 @@ def test_parser():
 
 
 def test_summary_excludes_workload_questions(tmp_path):
-    rows = [{"case_id": f"mmlu-{i}", "category": "mmlu", "predicted": "A", "answer": "A" if i else "B",
-             "correct": bool(i), "parsed": True, "finite": True} for i in range(3)]
-    io.write_jsonl(tmp_path / "w" / "cases.jsonl", [{"case_id": "mmlu-0"}])
+    from crova.workload import question_key
+
+    questions = [{"category": "mmlu", "question": f"q{i}", "choices": ["a", "b"]} for i in range(3)]
+    rows = [{"case_id": f"mmlu-{i}", "category": "mmlu", "question_key": question_key(q),
+             "predicted": "A", "answer": "A" if i else "B", "correct": bool(i), "parsed": True,
+             "finite": True} for i, q in enumerate(questions)]
+    io.write_jsonl(tmp_path / "w" / "cases.jsonl", [{"case_id": "other-id", **questions[0]}])
     io.write_json(tmp_path / "w" / "manifest.json", {"splits": {}})
     summary = accuracy.summarize(rows, tmp_path / "w")["mmlu"]
     assert summary["all"]["correct"] == 2 and summary["all"]["cases"] == 3
