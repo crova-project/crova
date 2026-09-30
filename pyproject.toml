@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "crova"
+version = "0.1.0"
+description = "Measuring and reducing cross-vendor numerical mismatch in language models"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+  "datasets>=3.0",
+  "numpy==2.2.6",
+  "peft==0.18.1",
+  "PyYAML>=6.0",
+  "safetensors==0.8.0",
+  "transformers==5.13.0",
+]
+
+[project.optional-dependencies]
+amd = ["torch==2.7.1+rocm6.3", "pytorch-triton-rocm==3.3.1"]
+nvidia = ["torch==2.7.1+cu128"]
+cpu = ["torch==2.7.1+cpu"]
+wandb = ["wandb"]
+test = ["pytest", "ruff"]
+
+[project.scripts]
+crova = "crova.cli:main"
+
+[tool.uv]
+conflicts = [[{ extra = "amd" }, { extra = "nvidia" }, { extra = "cpu" }]]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-rocm63", extra = "amd" },
+  { index = "pytorch-cu128", extra = "nvidia" },
+  { index = "pytorch-cpu", extra = "cpu" },
+]
+pytorch-triton-rocm = { index = "pytorch-rocm63", extra = "amd" }
+
+[[tool.uv.index]]
+name = "pytorch-rocm63"
+url = "https://download.pytorch.org/whl/rocm6.3"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crova"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["B905"]
