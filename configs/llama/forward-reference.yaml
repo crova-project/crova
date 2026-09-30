@@ -1,0 +1,7 @@
+# Reference GPU: teacher-forced logits over its own responses.
+model: llama
+workload: runs/llama/workload
+splits: [train, development]
+responses: runs/llama/nvidia/responses
+output: runs/llama/nvidia/logits
+precision: bf16

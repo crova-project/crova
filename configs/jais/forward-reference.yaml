@@ -1,0 +1,7 @@
+# Reference GPU: teacher-forced logits over its own responses.
+model: jais
+workload: runs/jais/workload
+splits: [train, development]
+responses: runs/jais/nvidia/responses
+output: runs/jais/nvidia/logits
+precision: bf16

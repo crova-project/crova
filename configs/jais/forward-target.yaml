@@ -1,0 +1,13 @@
+# Target GPU: per-case statistics against the reference logits, on the reference
+# responses. Change precision to fp16, fp32, layercast or selective (with
+# selective: attn+norm, ...), or add adapter: runs/jais/lora/equal/adapter.
+# round_to_bf16 also records statistics after rounding FP16/FP32 logits to BF16.
+model: jais
+workload: runs/jais/workload
+splits: [development]
+responses: runs/jais/nvidia/responses
+reference: runs/jais/nvidia/logits
+output: runs/jais/amd/bf16/stats
+precision: bf16
+load: cast
+round_to_bf16: false

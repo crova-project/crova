@@ -1,0 +1,7 @@
+# Pool per-case statistics into the reported metrics with 95% bootstrap intervals.
+workload: runs/llama/workload
+splits: [development]
+stats: runs/llama/amd/bf16/stats
+reference_responses: runs/llama/nvidia/responses
+target_responses: runs/llama/amd/bf16/responses
+output: runs/llama/amd/bf16/summary.json

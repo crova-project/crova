@@ -1,0 +1,7 @@
+# Pool per-case statistics into the reported metrics with 95% bootstrap intervals.
+workload: runs/olmoe/workload
+splits: [development]
+stats: runs/olmoe/amd/bf16/stats
+reference_responses: runs/olmoe/nvidia/responses
+target_responses: runs/olmoe/amd/bf16/responses
+output: runs/olmoe/amd/bf16/summary.json

@@ -1,0 +1,9 @@
+# Greedy responses. Run on the reference GPU for all splits; on the target GPU
+# use --set splits=[development] --set output=runs/llama/amd/bf16/responses (add
+# --set precision=... for other precisions) to measure whole-response agreement.
+model: llama
+workload: runs/llama/workload
+splits: [train, development]
+output: runs/llama/nvidia/responses
+max_new_tokens: 1024
+precision: bf16

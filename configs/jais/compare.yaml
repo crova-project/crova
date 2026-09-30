@@ -1,0 +1,7 @@
+# Pool per-case statistics into the reported metrics with 95% bootstrap intervals.
+workload: runs/jais/workload
+splits: [development]
+stats: runs/jais/amd/bf16/stats
+reference_responses: runs/jais/nvidia/responses
+target_responses: runs/jais/amd/bf16/responses
+output: runs/jais/amd/bf16/summary.json

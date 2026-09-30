@@ -1,0 +1,13 @@
+# Target GPU: per-case statistics against the reference logits, on the reference
+# responses. Change precision to fp16, fp32, layercast or selective (with
+# selective: attn+norm, ...), or add adapter: runs/qwenmoe/lora/equal/adapter.
+# round_to_bf16 also records statistics after rounding FP16/FP32 logits to BF16.
+model: qwenmoe
+workload: runs/qwenmoe/workload
+splits: [development]
+responses: runs/qwenmoe/nvidia/responses
+reference: runs/qwenmoe/nvidia/logits
+output: runs/qwenmoe/amd/bf16/stats
+precision: bf16
+load: cast
+round_to_bf16: false

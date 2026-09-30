@@ -1,0 +1,7 @@
+# Reference GPU: teacher-forced logits over its own responses.
+model: olmoe
+workload: runs/olmoe/workload
+splits: [train, development]
+responses: runs/olmoe/nvidia/responses
+output: runs/olmoe/nvidia/logits
+precision: bf16

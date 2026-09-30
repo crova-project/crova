@@ -1,0 +1,9 @@
+# Greedy responses. Run on the reference GPU for all splits; on the target GPU
+# use --set splits=[development] --set output=runs/olmoe/amd/bf16/responses (add
+# --set precision=... for other precisions) to measure whole-response agreement.
+model: olmoe
+workload: runs/olmoe/workload
+splits: [train, development]
+output: runs/olmoe/nvidia/responses
+max_new_tokens: 1024
+precision: bf16
