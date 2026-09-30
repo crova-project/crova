@@ -32,6 +32,10 @@ def test_parser():
     assert accuracy.CHOICE.search("B").group() == "B"
     assert accuracy.CHOICE.search(" (C) because").group() == "C"
     assert accuracy.CHOICE.search("ABC") is None
+    assert accuracy.CHOICE.search("A. صح").group() == "A"
+    assert accuracy.CHOICE.search("Answer: B").group() == "B"
+    assert accuracy.CHOICE.search("Let the number Andrew wrote be $N") is None
+    assert accuracy.CHOICE.search("Let the given equations be:\nEquation ") is None
 
 
 def test_summary_excludes_workload_questions(tmp_path):

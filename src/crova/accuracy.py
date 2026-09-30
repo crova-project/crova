@@ -19,7 +19,7 @@ from . import io
 from .models import environment, load_model, load_tokenizer
 from .workload import LETTERS, Workload, load_benchmark, render
 
-CHOICE = re.compile(r"(?<![A-Z0-9])[A-E](?![A-Z0-9])")
+CHOICE = re.compile(r"(?<![A-Za-z0-9])[A-E](?![A-Za-z0-9])")
 
 
 def letter_ids(tokenizer):
