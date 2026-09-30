@@ -124,7 +124,9 @@ The frozen BF16 model gets a rank-32 LoRA on its output head, trained on the
 target GPU towards the reference logits of the training responses. Four losses
 are combined: raw-logit MSE, forward KL, and two ranking losses that preserve
 the reference gaps around the top-1 and top-5 tokens (`src/crova/losses.py`).
-Each is divided by its initial mean before weighting. Profiles:
+Each is divided by its initial mean before weighting, and each response's
+loss is scaled by its length relative to the mean, so every training token
+counts equally. Profiles:
 
 | profile | MSE | KL | token gap | top-5 gap |
 |---|---|---|---|---|

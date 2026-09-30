@@ -5,8 +5,9 @@ factors, A Kaiming-uniform, B zero) is attached to the output head, so the
 corrected logits come out of the same BF16 head as in deployment. The four
 losses (losses.py) are computed in FP32, each divided by its mean over all
 training positions before training (c_j), and combined with a weighting
-profile. Each attempt uses one training response; the loss is the mean over its
-positions.
+profile. Each attempt uses one training response. Its loss is the mean over its
+positions times (its length / the mean training response length), so every
+training token carries the same weight regardless of response length.
 
 Optimizer: AdamW (lr 1e-4, betas 0.9/0.999, eps 1e-8, no weight decay). Each
 proposed update is tried at fractions 1, 1/2, ..., 1/64 of its size and kept at
@@ -88,8 +89,9 @@ class Data:
         return logits[:len(self.hidden[i])]
 
 
-def _loss_terms(head, hidden, target, device, *, weights=None, scales=None, backward=False):
-    """Mean over positions of each loss (and of the weighted objective)."""
+def _loss_terms(head, hidden, target, device, *, weights=None, scales=None, multiplier=1.0,
+                backward=False):
+    """Mean over positions of each loss, and the weighted objective times `multiplier`."""
     m = len(hidden)
     totals = dict.fromkeys(NAMES, 0.0)
     value = 0.0
@@ -100,7 +102,7 @@ def _loss_terms(head, hidden, target, device, *, weights=None, scales=None, back
         with torch.set_grad_enabled(backward):
             terms = losses(head(h), r)
             if weights is not None:
-                loss = objective(terms, weights, scales) * share
+                loss = objective(terms, weights, scales) * share * multiplier
                 if backward:
                     loss.backward()
                 value += float(loss.detach())
@@ -164,8 +166,9 @@ def train(config):
             sums[name] += terms[name] * m
         positions += m
     scales = {name: sums[name] / positions for name in NAMES}
+    mean_length = positions / len(data.names)
     io.write_json(out / "normalizers.json", {"scales": scales, "positions": positions,
-                                             "cases": len(data.names)})
+                                             "cases": len(data.names), "mean_length": mean_length})
 
     optimizer = torch.optim.AdamW(params, lr=config.get("lr", 1e-4), betas=(0.9, 0.999),
                                   eps=1e-8, weight_decay=0.0)
@@ -179,7 +182,7 @@ def train(config):
 
             def evaluate(backward, hidden=hidden, target=target):
                 return _loss_terms(head, hidden, target, device, weights=weights, scales=scales,
-                                   backward=backward)
+                                   multiplier=len(hidden) / mean_length, backward=backward)
 
             record = backtracking_step(params, optimizer, evaluate)
             record.update(step=step, case_id=data.names[i], positions=len(data.hidden[i]),

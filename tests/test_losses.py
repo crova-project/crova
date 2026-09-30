@@ -48,3 +48,15 @@ def test_objective_weights_normalised_losses():
     values = {name: torch.tensor(float(i + 1)) for i, name in enumerate(NAMES)}
     scales = dict.fromkeys(NAMES, 2.0)
     assert float(objective(values, PROFILES["equal"], scales)) == 0.25 * (1 + 2 + 3 + 4) / 2
+
+
+def test_token_weighting_scales_the_objective_but_not_the_reported_losses():
+    from crova.lora import _loss_terms
+
+    head = torch.nn.Linear(8, 20)
+    hidden, target = torch.randn(6, 8), torch.randn(6, 20)
+    scales = dict.fromkeys(NAMES, 1.0)
+    one, terms_one = _loss_terms(head, hidden, target, "cpu", weights=PROFILES["equal"], scales=scales)
+    three, terms_three = _loss_terms(head, hidden, target, "cpu", weights=PROFILES["equal"],
+                                     scales=scales, multiplier=3.0)
+    assert abs(three - 3 * one) < 1e-5 and terms_one == terms_three
