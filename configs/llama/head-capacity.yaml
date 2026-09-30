@@ -1,0 +1,9 @@
+# Needs target-GPU training logits with head inputs:
+#   crova forward --config configs/llama/forward-target.yaml --set splits=[train] \
+#     --set reference=null --set save_hidden=true --set output=runs/llama/amd/bf16/train-logits
+workload: runs/llama/workload
+splits: [train]
+target: runs/llama/amd/bf16/train-logits
+reference: runs/llama/nvidia/logits
+rank: 32
+output: runs/llama/head-capacity.json

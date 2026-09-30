@@ -1,0 +1,13 @@
+# Output-head LoRA on the target GPU, trained towards the reference logits.
+# profile: equal, numerical, mse, kl, token, top5, decision or kl_only.
+model: jais
+workload: runs/jais/workload
+reference: runs/jais/nvidia/logits
+output: runs/jais/lora/equal
+profile: equal
+epochs: 2
+max_positions: null   # positions per training response (null = all)
+rank: 32
+alpha: 64
+lr: 1.0e-4
+wandb: false

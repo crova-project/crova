@@ -1,0 +1,9 @@
+# Needs target-GPU training logits with head inputs:
+#   crova forward --config configs/jais/forward-target.yaml --set splits=[train] \
+#     --set reference=null --set save_hidden=true --set output=runs/jais/amd/bf16/train-logits
+workload: runs/jais/workload
+splits: [train]
+target: runs/jais/amd/bf16/train-logits
+reference: runs/jais/nvidia/logits
+rank: 32
+output: runs/jais/head-capacity.json

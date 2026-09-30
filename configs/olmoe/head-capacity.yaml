@@ -1,0 +1,9 @@
+# Needs target-GPU training logits with head inputs:
+#   crova forward --config configs/olmoe/forward-target.yaml --set splits=[train] \
+#     --set reference=null --set save_hidden=true --set output=runs/olmoe/amd/bf16/train-logits
+workload: runs/olmoe/workload
+splits: [train]
+target: runs/olmoe/amd/bf16/train-logits
+reference: runs/olmoe/nvidia/logits
+rank: 32
+output: runs/olmoe/head-capacity.json
