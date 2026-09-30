@@ -1,0 +1,2 @@
+operands: operands.safetensors
+output: runs/matmul/inspect-gpu
