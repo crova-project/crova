@@ -15,7 +15,7 @@ the first fraction that lowers this response's objective by more than
 Otherwise the factors and optimizer state are restored.
 
 Because the base model is frozen, the output-head inputs are computed once per
-training position and cached.
+training position (with the same `mode` as the reference logits) and cached.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ import torch
 from safetensors.torch import load_file
 
 from . import io
-from .capture import teacher_forced
+from .capture import mode_of, position_logits
 from .losses import NAMES, PROFILES, losses, objective
 from .models import environment, load_model
 from .workload import Workload
@@ -70,7 +70,7 @@ def schedule(cases, epochs, seed=20260910):
 class Data:
     """Cached head inputs and on-disk reference logits for the training responses."""
 
-    def __init__(self, model, workload, reference, max_positions):
+    def __init__(self, model, workload, reference, max_positions, mode):
         self.reference, self.max_positions = Path(reference), max_positions
         self.names = workload.ids("train")
         self.hidden = []
@@ -78,8 +78,8 @@ class Data:
             for k, cid in enumerate(self.names):
                 response = load_file(str(io.case_file(reference, cid, ".safetensors")))["response"]
                 response = response.tolist()[:max_positions] if max_positions else response.tolist()
-                self.hidden.append(teacher_forced(model, workload.cases[cid]["input_ids"],
-                                                  response, save_hidden=True)["hidden"])
+                self.hidden.append(position_logits(model, workload.cases[cid]["input_ids"],
+                                                   response, mode, save_hidden=True)["hidden"])
                 if k % 100 == 0:
                     print(f"[lora] cached head inputs {k + 1}/{len(self.names)}", flush=True)
 
@@ -142,7 +142,8 @@ def backtracking_step(params, optimizer, evaluate):
 
 def train(config):
     """config keys: model, workload, reference (reference-GPU forward directory),
-    output, profile, epochs (2), max_positions (null = whole response),
+    output, profile, mode (as used for the reference logits), epochs (2),
+    max_positions (null = whole response),
     rank (32), alpha (64), lr (1e-4), save_steps (optional list), wandb (optional)."""
     out = Path(config["output"])
     out.mkdir(parents=True, exist_ok=False)
@@ -152,7 +153,7 @@ def train(config):
     model, params = attach(model, rank=config.get("rank", 32), alpha=config.get("alpha", 64))
     device = params[0].device
     head = model.get_base_model().lm_head
-    data = Data(model, workload, config["reference"], config.get("max_positions"))
+    data = Data(model, workload, config["reference"], config.get("max_positions"), mode_of(config))
 
     # Normalizers: each loss's mean over all training positions before training.
     sums, positions = dict.fromkeys(NAMES, 0.0), 0

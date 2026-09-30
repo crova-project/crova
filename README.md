@@ -57,9 +57,20 @@ crova generate --config configs/jais/generate.yaml           # greedy responses
 crova forward  --config configs/jais/forward-reference.yaml  # logits at every response position
 ```
 
-`forward` runs one teacher-forced pass over prompt + response and stores the
-logits (and router logits for MoE models) per case. Both commands accept
-`--set shard=i --set num_shards=n` to split the work across GPUs.
+`forward` stores the logits at every response position (and router logits for
+MoE models) per case. Both commands accept `--set shard=i --set num_shards=n` to
+split the work across GPUs.
+
+`mode` selects how positions are computed; use the same mode on both GPUs:
+
+| mode | generation | per-position logits |
+|---|---|---|
+| `teacher_forced` | KV cache | one forward over prompt + response |
+| `prefix` | no cache, one full forward per token | one independent full forward per prefix |
+
+Both compute the same function with different rounding paths. `prefix` is
+slower (one forward per token) but each position depends only on its own
+prefix. The Jais configs use `prefix` and the others `teacher_forced`.
 
 ### 3. Target GPU: measure the mismatch
 

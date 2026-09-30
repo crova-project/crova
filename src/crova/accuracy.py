@@ -6,6 +6,7 @@ Two scoring methods, chosen by the prompt style:
   chat   chat-template prompt asking for one letter; the model generates up to
          8 tokens greedily and the first standalone letter A-E is parsed.
          Unparseable outputs count as wrong and are reported separately.
+         With mode: prefix the generation runs without the KV cache.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from pathlib import Path
 import torch
 
 from . import io
+from .capture import mode_of
 from .models import environment, load_model, load_tokenizer
 from .workload import LETTERS, Workload, load_benchmark, render
 
@@ -26,7 +28,8 @@ def letter_ids(tokenizer):
     return [tokenizer.encode(" " + c, add_special_tokens=False)[0] for c in LETTERS]
 
 
-def score(model, tokenizer, row, input_ids, style, *, letters=None, max_new_tokens=8):
+def score(model, tokenizer, row, input_ids, style, *, letters=None, max_new_tokens=8,
+          use_cache=True):
     device = next(model.parameters()).device
     ids = torch.tensor([input_ids], device=device)
     if style == "plain":
@@ -34,7 +37,7 @@ def score(model, tokenizer, row, input_ids, style, *, letters=None, max_new_toke
         candidates = logits[letters[:len(row["choices"])]]
         return LETTERS[int(candidates.argmax())], bool(torch.isfinite(candidates).all())
     output = model.generate(ids, attention_mask=torch.ones_like(ids), do_sample=False,
-                            max_new_tokens=max_new_tokens,
+                            max_new_tokens=max_new_tokens, use_cache=use_cache,
                             pad_token_id=tokenizer.eos_token_id)
     text = tokenizer.decode(output[0, ids.shape[1]:], skip_special_tokens=True)
     match = CHOICE.search(text)
@@ -61,7 +64,7 @@ def evaluate(config):
     items = questions(config, tokenizer)
     for k, (row, input_ids) in enumerate(items):
         predicted, finite = score(model, tokenizer, row, input_ids, config["prompt"],
-                                  letters=letters)
+                                  letters=letters, use_cache=mode_of(config) == "teacher_forced")
         rows.append({"case_id": row["case_id"], "category": row["category"],
                      "predicted": predicted, "answer": row["answer"],
                      "correct": predicted == row["answer"], "parsed": predicted is not None,

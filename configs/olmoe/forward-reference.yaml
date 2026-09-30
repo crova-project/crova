@@ -5,3 +5,6 @@ splits: [train, development]
 responses: runs/olmoe/nvidia/responses
 output: runs/olmoe/nvidia/logits
 precision: bf16
+# Execution mode; use the same one on both GPUs. The paper used prefix for Jais
+# (independent no-cache forward per prefix) and teacher_forced for the others.
+mode: teacher_forced

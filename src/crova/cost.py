@@ -2,7 +2,7 @@
 
 Two phases, each with a fresh model load on one GPU:
   benchmark    the complete accuracy benchmark (accuracy.py scoring)
-  development  teacher-forced forwards over the reference development responses
+  development  forwards over the reference development responses (in `mode`)
 Outputs are computed and discarded.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ import torch
 
 from . import io
 from .accuracy import letter_ids, questions, score
-from .capture import teacher_forced
+from .capture import mode_of, position_logits
 from .models import environment, experts_per_token, load_model, load_tokenizer
 from .workload import Workload
 
@@ -42,7 +42,8 @@ def measure(config):
     started = time.time()
     correct = 0
     for row, input_ids in items:
-        predicted, _ = score(model, tokenizer, row, input_ids, config["prompt"], letters=letters)
+        predicted, _ = score(model, tokenizer, row, input_ids, config["prompt"], letters=letters,
+                             use_cache=mode_of(config) == "teacher_forced")
         correct += predicted == row["answer"]
     torch.cuda.synchronize()
     record.update(benchmark_seconds=time.time() - started, benchmark_questions=len(items),
@@ -59,7 +60,7 @@ def measure(config):
     started, positions = time.time(), 0
     for cid in workload.ids("development"):
         response = io.read_json(io.case_file(config["responses"], cid, ".json"))["response"]
-        teacher_forced(model, workload.cases[cid]["input_ids"], response, moe=moe)
+        position_logits(model, workload.cases[cid]["input_ids"], response, mode_of(config), moe=moe)
         positions += len(response)
     torch.cuda.synchronize()
     record.update(development_seconds=time.time() - started, development_positions=positions,

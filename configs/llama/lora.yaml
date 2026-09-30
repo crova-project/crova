@@ -11,3 +11,6 @@ rank: 32
 alpha: 64
 lr: 1.0e-4
 wandb: false
+# Execution mode; use the same one on both GPUs. The paper used prefix for Jais
+# (independent no-cache forward per prefix) and teacher_forced for the others.
+mode: teacher_forced

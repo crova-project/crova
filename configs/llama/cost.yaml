@@ -6,3 +6,6 @@ workload: runs/llama/workload
 responses: runs/llama/nvidia/responses
 precision: bf16
 output: runs/llama/amd/bf16/cost.json
+# Execution mode; use the same one on both GPUs. The paper used prefix for Jais
+# (independent no-cache forward per prefix) and teacher_forced for the others.
+mode: teacher_forced

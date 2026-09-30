@@ -8,3 +8,4 @@ responses: runs/olmoe/nvidia/responses
 output: runs/kd/teachers/amd-bf16
 precision: bf16
 topk: 64
+mode: teacher_forced

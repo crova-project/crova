@@ -7,11 +7,14 @@ from safetensors.torch import load_file
 from crova import capture, head_capacity, io, kd, lora
 
 
-@pytest.fixture(params=["dense", "moe"])
+@pytest.fixture(params=[("dense", "teacher_forced"), ("moe", "teacher_forced"), ("dense", "prefix"),
+                        ("moe", "prefix")], ids=lambda p: "-".join(p))
 def setup(request, tmp_path, tiny_dense, tiny_moe):
-    model = tiny_dense if request.param == "dense" else tiny_moe
+    kind, mode = request.param
+    model = tiny_dense if kind == "dense" else tiny_moe
     workload = make_workload(tmp_path / "workload")
-    base = {"model": model, "workload": str(workload), "splits": ["train", "development"]}
+    base = {"model": model, "workload": str(workload), "splits": ["train", "development"],
+            "mode": mode}
     capture.generate({**base, "output": str(tmp_path / "responses"), "max_new_tokens": 6})
     capture.forward({**base, "responses": str(tmp_path / "responses"),
                      "output": str(tmp_path / "reference"), "save_hidden": True})
@@ -26,8 +29,29 @@ def test_generate_and_forward(setup):
     assert values["logits"].dtype == torch.bfloat16
     assert values["hidden"].shape == (len(response), 32)
     assert ("router_logits" in values) == ("moe" in model)
-    # Teacher-forced logits reproduce the greedy tokens (same device, same precision).
+    # The captured logits reproduce the greedy tokens (same device, precision and mode).
     assert values["logits"].float().argmax(-1).tolist() == response
+    if "router_logits" in values:
+        assert values["router_logits"].shape == (2, len(response), 8)
+
+
+def test_modes_compute_the_same_function(tiny_dense, tmp_path):
+    from crova.models import load_model
+
+    model = load_model(tiny_dense, precision="fp32", device="cpu")
+    prompt, response = [5, 9, 13, 40], [7, 22, 81, 3]
+    with torch.no_grad():
+        a = capture.position_logits(model, prompt, response, "teacher_forced", save_hidden=True)
+        b = capture.position_logits(model, prompt, response, "prefix", save_hidden=True)
+        assert capture.greedy(model, prompt, 3, 6, "teacher_forced") == capture.greedy(
+            model, prompt, 3, 6, "prefix")
+    torch.testing.assert_close(a["logits"], b["logits"], atol=1e-5, rtol=1e-5)
+    torch.testing.assert_close(a["hidden"], b["hidden"], atol=1e-5, rtol=1e-5)
+
+
+def test_unknown_mode_is_rejected():
+    with pytest.raises(ValueError):
+        capture.mode_of({"mode": "cached"})
 
 
 def test_target_statistics_and_compare(setup):
@@ -65,7 +89,8 @@ def test_lora_learns_a_known_head_shift(setup, tmp_path):
         from safetensors.torch import save_file
 
         save_file(values, str(io.case_file(shifted, cid, ".safetensors")))
-    out = lora.train({"model": model, "workload": str(workload), "reference": str(shifted),
+    out = lora.train({"model": model, "mode": base["mode"], "workload": str(workload),
+                      "reference": str(shifted),
                       "output": str(tmp_path / "lora"), "profile": "equal", "epochs": 30,
                       "lr": 1e-2, "save_steps": [4]})
     progress = io.read_jsonl(out / "progress.jsonl")

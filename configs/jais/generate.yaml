@@ -7,3 +7,6 @@ splits: [train, development]
 output: runs/jais/nvidia/responses
 max_new_tokens: 1024
 precision: bf16
+# Execution mode; use the same one on both GPUs. The paper used prefix for Jais
+# (independent no-cache forward per prefix) and teacher_forced for the others.
+mode: prefix

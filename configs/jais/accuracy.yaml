@@ -8,3 +8,6 @@ output: runs/jais/amd/bf16/accuracy.json
 
 # Accuracy is reported on all questions and on those outside the workload.
 exclude_workload: runs/jais/workload
+# Execution mode; use the same one on both GPUs. The paper used prefix for Jais
+# (independent no-cache forward per prefix) and teacher_forced for the others.
+mode: prefix

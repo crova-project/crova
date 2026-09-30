@@ -5,3 +5,6 @@ benchmarks: [mmlu, arc]
 prompt: plain
 precision: bf16
 output: runs/olmoe/amd/bf16/accuracy.json
+# Execution mode; use the same one on both GPUs. The paper used prefix for Jais
+# (independent no-cache forward per prefix) and teacher_forced for the others.
+mode: teacher_forced

@@ -1,10 +1,17 @@
-"""Greedy generation and teacher-forced logit capture.
+"""Greedy generation and per-position logit capture.
 
-generate  one greedy response per case (KV cache, batch size 1), stopping at the
-          first EOS or after `max_new_tokens` tokens.
+Two execution modes (config key `mode`), which compute the same function with
+different floating-point rounding paths:
+  teacher_forced  generation with the KV cache; logits from one forward over
+                  prompt + response[:-1] (no cache), all positions at once
+  prefix          generation and logits both from an independent full forward
+                  (no cache) over each prefix, one forward per response token
+Use the same mode on the reference and target GPUs.
+
+generate  one greedy response per case (batch size 1), stopping at the first EOS
+          or after `max_new_tokens` tokens.
           -> responses/<case>.json  {"case_id", "response", "eos"}
-forward   one teacher-forced forward over prompt + response[:-1] (no KV cache),
-          keeping the logits at every response position.
+forward   logits at every response position of a given response.
           -> <case>.safetensors  logits [m, vocab], response [m],
              router_logits [layers, m, experts] for MoE models,
              hidden [m, d] (input of the output head) with save_hidden
@@ -41,8 +48,38 @@ def _cases(config, workload):
     return [cid for i, cid in enumerate(ids) if i % shards == shard]
 
 
+MODES = ("teacher_forced", "prefix")
+
+
 def _device(model):
     return next(model.parameters()).device
+
+
+def mode_of(config):
+    mode = config.get("mode", "teacher_forced")
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
+    return mode
+
+
+def greedy(model, prompt, eos, max_new_tokens, mode):
+    """Greedy response token IDs, cut after the first EOS."""
+    ids = torch.tensor([prompt], device=_device(model))
+    if mode == "teacher_forced":
+        output = model.generate(ids, attention_mask=torch.ones_like(ids), do_sample=False,
+                                num_beams=1, max_new_tokens=max_new_tokens, eos_token_id=eos,
+                                pad_token_id=eos, use_cache=True)
+        response = output[0, ids.shape[1]:].tolist()
+        return response[:response.index(eos) + 1] if eos in response else response
+    response = []
+    for _ in range(max_new_tokens):
+        logits = model(input_ids=ids, use_cache=False, logits_to_keep=1).logits[0, -1]
+        token = int(logits.argmax())
+        response.append(token)
+        if token == eos:
+            break
+        ids = torch.cat([ids, ids.new_tensor([[token]])], dim=1)
+    return response
 
 
 @torch.no_grad()
@@ -52,30 +89,22 @@ def generate(config):
     out.mkdir(parents=True, exist_ok=True)
     model = _model(config)
     io.write_json(out / f"environment-{config.get('shard', 0)}.json", environment())
-    eos, cap = workload.eos_token_id, config.get("max_new_tokens", 1024)
+    eos, cap, mode = workload.eos_token_id, config.get("max_new_tokens", 1024), mode_of(config)
     started = time.time()
     cases = _cases(config, workload)
     for k, cid in enumerate(cases):
         path = io.case_file(out, cid, ".json")
         if path.exists():
             continue
-        ids = torch.tensor([workload.cases[cid]["input_ids"]], device=_device(model))
-        output = model.generate(ids, attention_mask=torch.ones_like(ids), do_sample=False,
-                                num_beams=1, max_new_tokens=cap, eos_token_id=eos,
-                                pad_token_id=eos, use_cache=True)
-        response = output[0, ids.shape[1]:].tolist()
-        if eos in response:
-            response = response[:response.index(eos) + 1]
+        response = greedy(model, workload.cases[cid]["input_ids"], eos, cap, mode)
         io.write_json(path, {"case_id": cid, "response": response,
                              "eos": bool(response) and response[-1] == eos})
         print(f"[generate] {k + 1}/{len(cases)} {cid} tokens={len(response)} "
               f"{time.time() - started:.0f}s", flush=True)
 
 
-def teacher_forced(model, prompt, response, *, save_hidden=False, moe=False):
-    """Logits (and optionally router logits and head inputs) at every response position."""
-    m = len(response)
-    ids = torch.tensor([prompt + response[:-1]], device=_device(model))
+def _run(model, ids, keep, *, save_hidden, moe):
+    """One forward without cache; returns the last `keep` positions' outputs."""
     head_inputs = []
     handle = None
     if save_hidden:
@@ -83,18 +112,31 @@ def teacher_forced(model, prompt, response, *, save_hidden=False, moe=False):
         handle = head.register_forward_pre_hook(lambda _m, args: head_inputs.append(args[0]))
     try:
         kwargs = {"output_router_logits": True} if moe else {}
-        output = model(input_ids=ids, use_cache=False, logits_to_keep=m, **kwargs)
+        output = model(input_ids=ids, use_cache=False, logits_to_keep=keep, **kwargs)
     finally:
         if handle is not None:
             handle.remove()
-    result = {"logits": output.logits[0, -m:].contiguous().cpu(),
-              "response": torch.tensor(response, dtype=torch.int32)}
+    result = {"logits": output.logits[0, -keep:]}
     router = getattr(output, "router_logits", None) if moe else None
     if router is not None:
-        result["router_logits"] = torch.stack(
-            [r.reshape(-1, r.shape[-1])[-m:] for r in router]).contiguous().cpu()
+        result["router_logits"] = torch.stack([r.reshape(-1, r.shape[-1])[-keep:] for r in router])
     if save_hidden:
-        result["hidden"] = head_inputs[-1][0, -m:].contiguous().cpu()
+        result["hidden"] = head_inputs[-1][0, -keep:]
+    return result
+
+
+def position_logits(model, prompt, response, mode="teacher_forced", *, save_hidden=False, moe=False):
+    """Logits (and optionally router logits and head inputs) at every response position."""
+    m = len(response)
+    if mode == "teacher_forced":
+        parts = [_run(model, torch.tensor([prompt + response[:-1]], device=_device(model)), m,
+                      save_hidden=save_hidden, moe=moe)]
+    else:
+        parts = [_run(model, torch.tensor([prompt + response[:i]], device=_device(model)), 1,
+                      save_hidden=save_hidden, moe=moe) for i in range(m)]
+    result = {key: torch.cat([p[key] for p in parts], dim=1 if key == "router_logits" else 0)
+                   .contiguous().cpu() for key in parts[0]}
+    result["response"] = torch.tensor(response, dtype=torch.int32)
     return result
 
 
@@ -109,6 +151,7 @@ def forward(config):
     moe = experts_per_token(model.config, config["model"]) > 0
     k_experts = experts_per_token(model.config, config["model"])
     io.write_json(out / f"environment-{config.get('shard', 0)}.json", environment())
+    mode = mode_of(config)
     started = time.time()
     cases = _cases(config, workload)
     for k, cid in enumerate(cases):
@@ -116,8 +159,8 @@ def forward(config):
         if target.exists():
             continue
         response = io.read_json(io.case_file(responses, cid, ".json"))["response"]
-        values = teacher_forced(model, workload.cases[cid]["input_ids"], response,
-                                save_hidden=config.get("save_hidden", False), moe=moe)
+        values = position_logits(model, workload.cases[cid]["input_ids"], response, mode,
+                                 save_hidden=config.get("save_hidden", False), moe=moe)
         if reference:
             ref = load_file(str(io.case_file(reference, cid, ".safetensors")))
             stats = metrics.case_stats(ref, values, experts_per_token=k_experts)
