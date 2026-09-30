@@ -1,0 +1,11 @@
+# One student per teacher; everything except the teacher is shared.
+# seed changes only the data order (a within-teacher baseline).
+student: olmo1b
+teacher: runs/kd/teachers/nvidia-bf16
+workload: runs/olmoe/workload
+output: runs/kd/students/nvidia-bf16-seed0
+seed: 0
+epochs: 2
+lr: 1.0e-5
+accumulation: 8
+warmup: 8

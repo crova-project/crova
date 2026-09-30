@@ -1,0 +1,10 @@
+# Compare every student with the first (reference) student on the development responses.
+workload: runs/olmoe/workload
+responses: runs/olmoe/nvidia/responses
+students:
+  nvidia-bf16-seed0: runs/kd/students/nvidia-bf16-seed0/student
+  nvidia-bf16-seed1: runs/kd/students/nvidia-bf16-seed1/student
+  amd-bf16: runs/kd/students/amd-bf16-seed0/student
+  amd-fp32: runs/kd/students/amd-fp32-seed0/student
+  amd-fp16: runs/kd/students/amd-fp16-seed0/student
+output: runs/kd/students.json

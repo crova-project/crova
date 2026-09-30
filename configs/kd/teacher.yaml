@@ -1,0 +1,10 @@
+# Teacher targets: top-64 log-probabilities of OLMoE over the reference (NVIDIA)
+# training responses. Run once per teacher GPU/precision, e.g. on NVIDIA with
+# output runs/kd/teachers/nvidia-bf16, and on AMD with precision bf16, fp32, fp16.
+model: olmoe
+workload: runs/olmoe/workload
+splits: [train]
+responses: runs/olmoe/nvidia/responses
+output: runs/kd/teachers/amd-bf16
+precision: bf16
+topk: 64
