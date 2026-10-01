@@ -166,6 +166,9 @@ def train(config):
             sums[name] += terms[name] * m
         positions += m
     scales = {name: sums[name] / positions for name in NAMES}
+    if not all(math.isfinite(v) and v > 1e-8 for v in scales.values()):
+        raise ValueError(f"loss normalizers must be finite and above 1e-8, got {scales}: the target "
+                         "GPU already matches the reference on the training responses")
     mean_length = positions / len(data.names)
     io.write_json(out / "normalizers.json", {"scales": scales, "positions": positions,
                                              "cases": len(data.names), "mean_length": mean_length})

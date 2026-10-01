@@ -22,6 +22,9 @@ dependencies = [
 amd = ["torch==2.7.1+rocm6.3", "pytorch-triton-rocm==3.3.1"]
 nvidia = ["torch==2.7.1+cu128"]
 cpu = ["torch==2.7.1+cpu"]
+# The matmul case study needs a newer stack (FP32-output vendor GEMM via torch.mm(out_dtype=...)).
+matmul-amd = ["torch==2.11.0.dev20260206+rocm7.0", "triton-rocm==3.6.0+git9844da95"]
+matmul-nvidia = ["torch==2.11.0+cu128"]
 wandb = ["wandb"]
 test = ["pytest", "ruff"]
 
@@ -29,19 +32,28 @@ test = ["pytest", "ruff"]
 crova = "crova.cli:main"
 
 [tool.uv]
-conflicts = [[{ extra = "amd" }, { extra = "nvidia" }, { extra = "cpu" }]]
+conflicts = [[{ extra = "amd" }, { extra = "nvidia" }, { extra = "cpu" }, { extra = "matmul-amd" },
+              { extra = "matmul-nvidia" }]]
 
 [tool.uv.sources]
 torch = [
   { index = "pytorch-rocm63", extra = "amd" },
   { index = "pytorch-cu128", extra = "nvidia" },
   { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-rocm70-nightly", extra = "matmul-amd" },
+  { index = "pytorch-cu128", extra = "matmul-nvidia" },
 ]
 pytorch-triton-rocm = { index = "pytorch-rocm63", extra = "amd" }
+triton-rocm = { index = "pytorch-rocm70-nightly", extra = "matmul-amd" }
 
 [[tool.uv.index]]
 name = "pytorch-rocm63"
 url = "https://download.pytorch.org/whl/rocm6.3"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-rocm70-nightly"
+url = "https://download.pytorch.org/whl/nightly/rocm7.0"
 explicit = true
 
 [[tool.uv.index]]

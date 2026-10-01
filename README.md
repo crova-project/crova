@@ -174,6 +174,10 @@ crova kd-targets runs/kd/teachers/nvidia-bf16 runs/kd/teachers/amd-fp32 --worklo
 
 ### 8. Matmul case study
 
+This stage needs a newer stack than the rest (an FP32-output vendor GEMM, available
+from torch 2.11). Install it into a separate environment:
+`uv sync --extra matmul-amd` or `uv sync --extra matmul-nvidia`.
+
 One projection computed with the vendor matmul, a fixed-order tensor-core Triton
 kernel and a sequential FP32 Triton kernel, on each GPU:
 

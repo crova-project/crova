@@ -158,3 +158,11 @@ def test_distillation_targets(setup):
     summary = kd.evaluate({"students": {"a": model, "b": model}, "workload": str(workload),
                            "responses": str(tmp / "responses"), "output": str(tmp / "kd.json")})
     assert summary["b"]["top1_agreement_pct"] == 100
+
+
+def test_lora_rejects_a_target_that_already_matches(setup, tmp_path):
+    model, workload, base, tmp = setup
+    with pytest.raises(ValueError, match="normalizers"):
+        lora.train({"model": model, "mode": base["mode"], "workload": str(workload),
+                    "reference": str(tmp / "reference"), "output": str(tmp_path / "same"),
+                    "profile": "equal", "epochs": 1})
