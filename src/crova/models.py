@@ -17,6 +17,11 @@ MODELS = {
 }
 
 
+# Jais's published tokenizer uses a pre-tokenizer regex that transformers flags as
+# incorrect; the corrected pattern changes the tokens of about a quarter of prompts.
+TOKENIZER_OPTIONS = {"jais": {"fix_mistral_regex": True}}
+
+
 def resolve(name):
     """Return (model ID or local path, revision, experts per token)."""
     if name in MODELS:
@@ -36,7 +41,7 @@ def load_tokenizer(name):
     from transformers import AutoTokenizer
 
     model_id, revision, _ = resolve(name)
-    return AutoTokenizer.from_pretrained(model_id, revision=revision)
+    return AutoTokenizer.from_pretrained(model_id, revision=revision, **TOKENIZER_OPTIONS.get(name, {}))
 
 
 def default_device():
