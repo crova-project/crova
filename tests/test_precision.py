@@ -56,3 +56,29 @@ def test_selective_all_blocks_close_to_fp32(tiny_dense, ids):
 def test_selective_rejects_unknown(tiny_dense):
     with pytest.raises(ValueError):
         load_model(tiny_dense, precision="selective", selective="attention", device="cpu")
+
+
+def _fp32_stored_reference(model, setting):
+    """The straightforward version: chosen modules converted to FP32 storage."""
+    from crova.precision import _map, _to16, _to32
+
+    parts = setting.split("+")
+    for name, module in list(model.named_modules()):
+        if ("attn" in parts and name.endswith(".self_attn")) or ("mlp" in parts and name.endswith(".mlp")):
+            module.float()
+            module.register_forward_pre_hook(
+                lambda m, a, k: (_map(a, _to32), {key: _map(v, _to32) for key, v in k.items()}),
+                with_kwargs=True)
+            module.register_forward_hook(lambda m, a, out: _map(out, _to16))
+
+
+@pytest.mark.parametrize("setting", ["attn", "mlp", "attn+mlp"])
+def test_selective_keeps_bf16_weights_with_identical_outputs(tiny_dense, ids, setting):
+    from crova.precision import LayerCastLinear
+
+    model = load_model(tiny_dense, precision="selective", selective=setting, device="cpu")
+    reference = load_model(tiny_dense, device="cpu")
+    _fp32_stored_reference(reference, setting)
+    assert torch.equal(_logits(model, ids), _logits(reference, ids))
+    linears = [m for m in model.modules() if isinstance(m, (LayerCastLinear, torch.nn.Linear))]
+    assert all(m.weight.dtype == torch.bfloat16 for m in linears)

@@ -5,10 +5,12 @@ fp16       every parameter cast to FP16
 fp32       every parameter cast to FP32
 layercast  FP32 computation everywhere; linear weights stay stored in BF16 and
            are upcast inside each matmul (FP32 upcasting)
-selective  upcast only chosen parts to FP32, then return to BF16 at their output.
+selective  compute only chosen parts in FP32, then return to BF16 at their output.
            Parts are joined with "+": norm, attn, mlp, head, and at most one block
            range: first8, last8 or blocks (all layers). "nomlp" runs everything in
-           FP32 except the MLPs.
+           FP32 except the MLPs. As in layercast, linear weights stay stored in
+           BF16 and are upcast inside each matmul; BF16 -> FP32 is exact, so this
+           gives the same outputs as FP32-stored weights with less memory.
 """
 from __future__ import annotations
 
@@ -70,8 +72,24 @@ def _to16(t):
     return t.to(torch.bfloat16) if t.dtype == torch.float32 else t
 
 
+def _fp32_compute(module, skip=lambda name: False):
+    """FP32 computation inside `module`: linear layers become LayerCastLinear (BF16
+    storage), all other parameters and buffers are stored in FP32."""
+    for name, child in list(module.named_modules()):
+        if type(child) is torch.nn.Linear and name and not skip(name):
+            parent, _, attr = name.rpartition(".")
+            setattr(module.get_submodule(parent) if parent else module, attr, LayerCastLinear(child))
+    with torch.no_grad():
+        for name, sub in module.named_modules():
+            if isinstance(sub, LayerCastLinear) or skip(name):
+                continue
+            for value in list(sub._parameters.values()) + list(sub._buffers.values()):
+                if value is not None and value.is_floating_point():
+                    value.data = value.data.float()
+
+
 def _upcast(module, *, keep_output=False):
-    module.float()
+    _fp32_compute(module)
     module.register_forward_pre_hook(
         lambda m, args, kwargs: (_map(args, _to32), {k: _map(v, _to32) for k, v in kwargs.items()}),
         with_kwargs=True)
@@ -90,10 +108,9 @@ def adapt_selective(model, setting):
         raise ValueError(f"unknown selective FP32 setting: {setting}")
     chosen = []
     if parts == ["nomlp"]:
-        model.float()
+        _fp32_compute(model, skip=lambda name: ".mlp" in f"{name}.")
         for name, module in model.named_modules():
             if name.endswith(".mlp"):
-                module.to(torch.bfloat16)
                 module.register_forward_pre_hook(
                     lambda m, args, kwargs: (_map(args, lambda t: t.to(torch.bfloat16)
                                                    if t.is_floating_point() else t), kwargs),
@@ -109,13 +126,16 @@ def adapt_selective(model, setting):
     if blocks:
         whole = {"first8": range(8), "last8": range(count - 8, count), "blocks": range(count)}[blocks[0]]
     covered = tuple(f"model.layers.{i}." for i in whole)
-    for name, module in model.named_modules():
+    for name, module in list(model.named_modules()):
         pick = (("norm" in parts and "Norm" in type(module).__name__)
                 or ("attn" in parts and name.endswith(".self_attn"))
                 or ("mlp" in parts and name.endswith(".mlp"))
                 or ("head" in parts and name == "lm_head"))
         if pick and not name.startswith(covered):
-            _upcast(module, keep_output=name == "lm_head")
+            if name == "lm_head":  # the head returns FP32 logits
+                model.lm_head = LayerCastLinear(module)
+            else:
+                _upcast(module)
             chosen.append(name)
     for i in whole:
         _upcast(_layers(model)[i])
