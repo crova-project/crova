@@ -25,6 +25,22 @@ CONFIG_COMMANDS = {
 }
 
 
+PINNED_TORCH = {"matmul": "2.11.", "default": "2.7.1"}
+
+
+def _check_torch(command):
+    """Warn loudly if the installed torch is not the version the experiments were run with."""
+    import sys
+
+    import torch
+
+    expected = PINNED_TORCH["matmul" if command.startswith("matmul") else "default"]
+    if not torch.__version__.startswith(expected):
+        print(f"WARNING: torch {torch.__version__} is installed, but this stage was run with torch "
+              f"{expected}*. Install with `uv sync --extra <amd|nvidia|cpu>` (matmul: "
+              "`--extra matmul-<amd|nvidia>`) and run from that environment.", file=sys.stderr)
+
+
 def _override(config, assignments):
     for item in assignments or []:
         key, _, value = item.partition("=")
@@ -54,6 +70,7 @@ def main(argv=None):
     sub.add_argument("first"), sub.add_argument("second"), sub.add_argument("--output", required=True)
     args = parser.parse_args(argv)
 
+    _check_torch(args.command)
     if args.command in CONFIG_COMMANDS:
         import importlib
 

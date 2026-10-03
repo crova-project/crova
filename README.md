@@ -21,8 +21,14 @@ Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 uv venv && uv sync --extra nvidia   # NVIDIA GPU (torch 2.7.1+cu128)
 uv venv && uv sync --extra amd      # AMD GPU (torch 2.7.1+rocm6.3)
-uv venv && uv sync --extra cpu --extra test && uv run pytest   # CPU tests
+uv venv && uv sync --extra cpu --extra test   # CPU tests
+source .venv/bin/activate
 ```
+
+Run commands from the activated environment (`crova ...`, `pytest`). A plain
+`uv run` re-syncs without the hardware extra and replaces the pinned torch; if
+you prefer `uv run`, pass the same extra every time (`uv run --extra nvidia crova ...`).
+`crova` warns when the installed torch is not the pinned version.
 
 Add `--extra wandb` to log LoRA training scalars to Weights & Biases (set
 `wandb: true` in the config; project and entity come from `WANDB_PROJECT` and
@@ -205,7 +211,7 @@ one or more inputs [..., K]. The paper uses the input and weight of the first
 ## Tests
 
 ```bash
-uv run pytest
+pytest
 ```
 
 The tests use tiny random models on CPU and need no downloads.
