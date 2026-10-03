@@ -14,7 +14,7 @@ def setup(request, tmp_path, tiny_dense, tiny_moe):
     model = tiny_dense if kind == "dense" else tiny_moe
     workload = make_workload(tmp_path / "workload")
     base = {"model": model, "workload": str(workload), "splits": ["train", "development"],
-            "mode": mode}
+            "mode": mode, "device": "cpu"}
     capture.generate({**base, "output": str(tmp_path / "responses"), "max_new_tokens": 6})
     capture.forward({**base, "responses": str(tmp_path / "responses"),
                      "output": str(tmp_path / "reference"), "save_hidden": True})
@@ -89,7 +89,7 @@ def test_lora_learns_a_known_head_shift(setup, tmp_path):
         from safetensors.torch import save_file
 
         save_file(values, str(io.case_file(shifted, cid, ".safetensors")))
-    out = lora.train({"model": model, "mode": base["mode"], "workload": str(workload),
+    out = lora.train({"model": model, "mode": base["mode"], "device": "cpu", "workload": str(workload),
                       "reference": str(shifted),
                       "output": str(tmp_path / "lora"), "profile": "equal", "epochs": 30,
                       "lr": 1e-2, "save_steps": [4]})
@@ -155,7 +155,7 @@ def test_distillation_targets(setup):
                      "output": str(tmp / "direct-topk"), "topk": 8})
     direct = load_file(str(io.case_file(tmp / "direct-topk", "mmlu-0000", ".safetensors")))
     assert torch.equal(direct["topk_index"], values["topk_index"])
-    summary = kd.evaluate({"students": {"a": model, "b": model}, "workload": str(workload),
+    summary = kd.evaluate({"students": {"a": model, "b": model}, "device": "cpu", "workload": str(workload),
                            "responses": str(tmp / "responses"), "output": str(tmp / "kd.json")})
     assert summary["b"]["top1_agreement_pct"] == 100
 
@@ -163,6 +163,15 @@ def test_distillation_targets(setup):
 def test_lora_rejects_a_target_that_already_matches(setup, tmp_path):
     model, workload, base, tmp = setup
     with pytest.raises(ValueError, match="normalizers"):
-        lora.train({"model": model, "mode": base["mode"], "workload": str(workload),
+        lora.train({"model": model, "mode": base["mode"], "device": "cpu", "workload": str(workload),
                     "reference": str(tmp / "reference"), "output": str(tmp_path / "same"),
                     "profile": "equal", "epochs": 1})
+
+
+def test_missing_gpu_is_an_error_not_a_cpu_fallback(monkeypatch):
+    from crova.models import resolve_device
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    with pytest.raises(RuntimeError, match="no GPU"):
+        resolve_device(None)
+    assert resolve_device("cpu") == "cpu"

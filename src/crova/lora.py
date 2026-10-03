@@ -151,7 +151,7 @@ def train(config):
     out.mkdir(parents=True, exist_ok=False)
     workload = Workload(config["workload"])
     weights = PROFILES[config["profile"]]
-    model = load_model(config["model"])
+    model = load_model(config["model"], device=config.get("device"))
     model, params = attach(model, rank=config.get("rank", 32), alpha=config.get("alpha", 64))
     device = params[0].device
     head = model.get_base_model().lm_head

@@ -44,8 +44,15 @@ def load_tokenizer(name):
     return AutoTokenizer.from_pretrained(model_id, revision=revision, **TOKENIZER_OPTIONS.get(name, {}))
 
 
-def default_device():
-    return "cuda" if torch.cuda.is_available() else "cpu"
+def resolve_device(device=None):
+    """The GPU unless a config explicitly asks for `device: cpu`; never a silent CPU fallback."""
+    if device in (None, "cuda"):
+        if not torch.cuda.is_available():
+            raise RuntimeError("no GPU is visible to torch (check the driver, the torch build and "
+                               "CUDA_VISIBLE_DEVICES / ROCR_VISIBLE_DEVICES); set `device: cpu` to "
+                               "run on CPU deliberately")
+        return "cuda"
+    return device
 
 
 def numerics():
@@ -63,6 +70,7 @@ def load_model(name, *, precision="bf16", load="cast", selective=None, adapter=N
       transformers to load in the target dtype.
     selective: module selection for precision="selective" (see precision.py).
     adapter: optional PEFT output-head LoRA directory.
+    device: "cuda" (default; fails if no GPU is visible) or "cpu".
     """
     from transformers import AutoModelForCausalLM
 
@@ -78,7 +86,7 @@ def load_model(name, *, precision="bf16", load="cast", selective=None, adapter=N
 
         model = PeftModel.from_pretrained(model, adapter, is_trainable=False)
         model.eval()
-    return model.to(device or default_device())
+    return model.to(resolve_device(device))
 
 
 def environment():

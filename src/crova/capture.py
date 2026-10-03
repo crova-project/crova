@@ -39,7 +39,7 @@ from .workload import Workload
 def _model(config):
     return load_model(config["model"], precision=config.get("precision", "bf16"),
                       load=config.get("load", "cast"), selective=config.get("selective"),
-                      adapter=config.get("adapter"))
+                      adapter=config.get("adapter"), device=config.get("device"))
 
 
 def _cases(config, workload):

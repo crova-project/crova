@@ -114,7 +114,8 @@ def evaluate(config):
     workload, responses (reference-GPU responses), output."""
     workload = Workload(config["workload"])
     names = list(config["students"])
-    models = {name: load_model(path) for name, path in config["students"].items()}
+    models = {name: load_model(path, device=config.get("device"))
+              for name, path in config["students"].items()}
     per_case = {name: {} for name in names[1:]}
     for cid in workload.ids("development"):
         response = io.read_json(io.case_file(config["responses"], cid, ".json"))["response"]

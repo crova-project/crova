@@ -23,7 +23,7 @@ def _load(config):
     started = time.time()
     model = load_model(config["model"], precision=config.get("precision", "bf16"),
                        load=config.get("load", "cast"), selective=config.get("selective"),
-                       adapter=config.get("adapter"))
+                       adapter=config.get("adapter"), device=config.get("device"))
     torch.cuda.synchronize()
     return model, time.time() - started
 
