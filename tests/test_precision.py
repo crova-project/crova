@@ -82,3 +82,17 @@ def test_selective_keeps_bf16_weights_with_identical_outputs(tiny_dense, ids, se
     assert torch.equal(_logits(model, ids), _logits(reference, ids))
     linears = [m for m in model.modules() if isinstance(m, (LayerCastLinear, torch.nn.Linear))]
     assert all(m.weight.dtype == torch.bfloat16 for m in linears)
+
+
+@pytest.mark.parametrize("setting", ["router", "router+attn"])
+def test_router_setting_on_moe(tiny_moe, ids, setting):
+    model = load_model(tiny_moe, precision="selective", selective=setting, device="cpu")
+    gates = [m for n, m in model.named_modules() if n.endswith(".mlp.gate")]
+    assert gates and all(p.dtype == torch.float32 for g in gates for p in g.parameters())
+    logits = _logits(model, ids)
+    assert logits.dtype == torch.bfloat16 and torch.isfinite(logits).all()
+
+
+def test_router_setting_selects_nothing_on_dense(tiny_dense):
+    with pytest.raises(ValueError, match="selected nothing"):
+        load_model(tiny_dense, precision="selective", selective="router", device="cpu")

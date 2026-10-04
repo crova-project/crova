@@ -107,7 +107,7 @@ Set `precision` in any model-loading config:
 | `fp16` | all weights and computation in FP16 |
 | `fp32` | all weights and computation in FP32 |
 | `layercast` | FP32 computation, linear weights kept in BF16 and upcast per matmul |
-| `selective` | FP32 only for the parts in `selective`, e.g. `attn+norm`, `mlp`, `head`, `last8`, `first8`, `blocks`, `nomlp` |
+| `selective` | FP32 only for the parts in `selective`, e.g. `attn+norm`, `mlp`, `head`, `router` (MoE expert router), `last8`, `first8`, `blocks`, `nomlp` |
 
 `load: direct` loads the checkpoint straight into the target dtype instead of
 casting the BF16 model. With FP16/FP32 targets, `round_to_bf16: true` also

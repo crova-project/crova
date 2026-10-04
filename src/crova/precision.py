@@ -6,7 +6,8 @@ fp32       every parameter cast to FP32
 layercast  FP32 computation everywhere; linear weights stay stored in BF16 and
            are upcast inside each matmul (FP32 upcasting)
 selective  compute only chosen parts in FP32, then return to BF16 at their output.
-           Parts are joined with "+": norm, attn, mlp, head, and at most one block
+           Parts are joined with "+": norm, attn, mlp, head, router (the MoE expert
+           router, mlp.gate), and at most one block
            range: first8, last8 or blocks (all layers). "nomlp" runs everything in
            FP32 except the MLPs. As in layercast, linear weights stay stored in
            BF16 and are upcast inside each matmul; BF16 -> FP32 is exact, so this
@@ -19,7 +20,7 @@ import torch.nn.functional as F
 
 DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32,
           "layercast": torch.float32}
-PARTS = ("norm", "attn", "mlp", "head")
+PARTS = ("norm", "attn", "mlp", "head", "router")
 BLOCKS = ("first8", "last8", "blocks")
 
 
@@ -130,6 +131,7 @@ def adapt_selective(model, setting):
         pick = (("norm" in parts and "Norm" in type(module).__name__)
                 or ("attn" in parts and name.endswith(".self_attn"))
                 or ("mlp" in parts and name.endswith(".mlp"))
+                or ("router" in parts and name.endswith(".mlp.gate"))
                 or ("head" in parts and name == "lm_head"))
         if pick and not name.startswith(covered):
             if name == "lm_head":  # the head returns FP32 logits
