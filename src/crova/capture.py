@@ -8,8 +8,10 @@ different floating-point rounding paths:
                   (no cache) over each prefix, one forward per response token
 Use the same mode on the reference and target GPUs.
 
-generate  one greedy response per case (batch size 1), stopping at the first EOS
-          or after `max_new_tokens` tokens.
+generate  one greedy response per case, stopping at the first EOS or after
+          `max_new_tokens` tokens. Batch size 1 by default; `batch_size` > 1
+          (teacher_forced mode only) left-pads prompts and is meant for generating
+          training data, not for measured responses.
           -> responses/<case>.json  {"case_id", "response", "eos"}
 forward   logits at every response position of a given response.
           -> <case>.safetensors  logits [m, vocab], response [m],
@@ -19,6 +21,8 @@ forward   logits at every response position of a given response.
           (<case>.stats.json), so the target logits never touch disk.
           With `topk`, only the top-K log-probabilities of the full-vocabulary
           softmax are written (topk_logprob, topk_index), e.g. for distillation.
+          With `keep_positions` N, the forward covers the whole response but only
+          the first N positions are written.
 
 Run `generate` and `forward` on the reference GPU first; run `forward` on the
 target GPU with `responses` pointing at the reference responses.
@@ -62,6 +66,21 @@ def mode_of(config):
     return mode
 
 
+def greedy_batch(model, prompts, eos, max_new_tokens):
+    """Greedy responses for several prompts at once (left padding, KV cache)."""
+    width = max(len(p) for p in prompts)
+    device = _device(model)
+    ids = torch.tensor([[eos] * (width - len(p)) + p for p in prompts], device=device)
+    mask = torch.tensor([[0] * (width - len(p)) + [1] * len(p) for p in prompts], device=device)
+    output = model.generate(ids, attention_mask=mask, do_sample=False, num_beams=1,
+                            max_new_tokens=max_new_tokens, eos_token_id=eos, pad_token_id=eos,
+                            use_cache=True)
+    responses = []
+    for row in output[:, width:].tolist():
+        responses.append(row[:row.index(eos) + 1] if eos in row else row)
+    return responses
+
+
 def greedy(model, prompt, eos, max_new_tokens, mode):
     """Greedy response token IDs, cut after the first EOS."""
     ids = torch.tensor([prompt], device=_device(model))
@@ -91,15 +110,21 @@ def generate(config):
     io.write_json(out / f"environment-{config.get('shard', 0)}.json", environment())
     eos, cap, mode = workload.eos_token_id, config.get("max_new_tokens", 1024), mode_of(config)
     started = time.time()
-    cases = _cases(config, workload)
-    for k, cid in enumerate(cases):
-        path = io.case_file(out, cid, ".json")
-        if path.exists():
-            continue
-        response = greedy(model, workload.cases[cid]["input_ids"], eos, cap, mode)
-        io.write_json(path, {"case_id": cid, "response": response,
-                             "eos": bool(response) and response[-1] == eos})
-        print(f"[generate] {k + 1}/{len(cases)} {cid} tokens={len(response)} "
+    batch = config.get("batch_size", 1)
+    if batch > 1 and mode != "teacher_forced":
+        raise ValueError("batch_size > 1 needs mode: teacher_forced")
+    todo = [cid for cid in _cases(config, workload) if not io.case_file(out, cid, ".json").exists()]
+    todo.sort(key=lambda cid: len(workload.cases[cid]["input_ids"]))  # less padding per batch
+    for start in range(0, len(todo), batch):
+        chunk = todo[start:start + batch]
+        prompts = [workload.cases[cid]["input_ids"] for cid in chunk]
+        responses = (greedy_batch(model, prompts, eos, cap) if batch > 1
+                     else [greedy(model, prompts[0], eos, cap, mode)])
+        for cid, response in zip(chunk, responses, strict=True):
+            io.write_json(io.case_file(out, cid, ".json"),
+                          {"case_id": cid, "response": response,
+                           "eos": bool(response) and response[-1] == eos})
+        print(f"[generate] {start + len(chunk)}/{len(todo)} tokens={len(responses[-1])} "
               f"{time.time() - started:.0f}s", flush=True)
 
 
@@ -161,6 +186,10 @@ def forward(config):
         response = io.read_json(io.case_file(responses, cid, ".json"))["response"]
         values = position_logits(model, workload.cases[cid]["input_ids"], response, mode,
                                  save_hidden=config.get("save_hidden", False), moe=moe)
+        if config.get("keep_positions"):
+            n = config["keep_positions"]
+            values = {k: (v[:, :n] if k == "router_logits" else v[:n]).contiguous()
+                      for k, v in values.items()}
         if reference:
             ref = load_file(str(io.case_file(reference, cid, ".safetensors")))
             stats = metrics.case_stats(ref, values, experts_per_token=k_experts)

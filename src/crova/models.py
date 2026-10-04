@@ -14,6 +14,8 @@ MODELS = {
     "llama": ("unsloth/Llama-3.1-8B-Instruct", "4699cc75b550f9c6f3173fb80f4703b62d946aa5", 0),
     "qwenmoe": ("Qwen/Qwen1.5-MoE-A2.7B-Chat", "ec052fda178e241c7c443468d2fa1db6618996be", 4),
     "olmo1b": ("allenai/OLMo-1B-0724-hf", "d7cbab742d80589e714b1a2d7f838dcd21cbe143", 0),
+    "llama1b": ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", 0),
+    "qwen05b": ("Qwen/Qwen1.5-0.5B", "8f445e3628f3500ee69f24e1303c9f10f5342a39", 0),
 }
 
 

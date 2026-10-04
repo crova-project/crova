@@ -170,3 +170,53 @@ class Workload:
     @property
     def eos_token_id(self):
         return self.manifest["eos_token_id"]
+
+
+def _text_key(row):
+    return _digest([row["question"], row["choices"]])[:16]
+
+
+def extend(config):
+    """Grow an existing workload's training split, keeping all of its questions.
+
+    config keys: base (workload directory), model, output, train_total,
+    sources (mapping benchmark -> dataset splits to draw new questions from),
+    exclude_test (benchmarks whose test sets must not overlap), seed.
+    New questions are taken in a deterministic hash order, skipping duplicates of
+    existing questions and anything whose text matches an excluded test question.
+    Every case is tokenized for `model` with the base workload's prompt style.
+    """
+    base = Workload(config["base"])
+    output = Path(config["output"])
+    output.mkdir(parents=True, exist_ok=False)
+    seed = str(config.get("seed", 20260910))
+    taken = {_text_key(row) for row in base.cases.values()}
+    test = {_text_key(row) for category in config.get("exclude_test", [])
+            for row in load_benchmark(category)}
+    candidates = []
+    for category, splits in config["sources"].items():
+        for row in load_benchmark(category, splits):
+            key = _text_key(row)
+            if key not in taken and key not in test:
+                taken.add(key)
+                candidates.append(row)
+    candidates.sort(key=lambda row: _digest([seed, "extend", row["case_id"]]))
+    needed = config["train_total"] - len(base.ids("train"))
+    if needed < 0 or needed > len(candidates):
+        raise ValueError(f"cannot reach train_total={config['train_total']} "
+                         f"({len(candidates)} new candidates)")
+    new = candidates[:needed]
+    tokenizer = load_tokenizer(config["model"])
+    prompt = base.manifest["prompt"]
+    cases = [{**{k: v for k, v in row.items() if k != "input_ids"},
+              "input_ids": render(tokenizer, row, prompt)}
+             for row in [*base.cases.values(), *new]]
+    io.write_jsonl(output / "cases.jsonl", cases)
+    io.write_json(output / "manifest.json", {
+        **{k: v for k, v in base.manifest.items() if k not in ("splits", "source")},
+        "model": config["model"], "eos_token_id": tokenizer.eos_token_id,
+        "base": str(config["base"]), "sources": config["sources"],
+        "exclude_test": config.get("exclude_test", []), "seed": seed,
+        "splits": {"train": base.ids("train") + [r["case_id"] for r in new],
+                   "development": base.ids("development")}})
+    return output

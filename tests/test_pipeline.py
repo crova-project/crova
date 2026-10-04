@@ -175,3 +175,23 @@ def test_missing_gpu_is_an_error_not_a_cpu_fallback(monkeypatch):
     with pytest.raises(RuntimeError, match="no GPU"):
         resolve_device(None)
     assert resolve_device("cpu") == "cpu"
+
+
+def test_batched_generation_matches_one_at_a_time(tiny_dense, tmp_path):
+    from crova.models import load_model
+
+    model = load_model(tiny_dense, precision="fp32", device="cpu")
+    prompts = [[5, 9, 13], [7, 22, 81, 40, 41], [60]]
+    with torch.no_grad():
+        batched = capture.greedy_batch(model, prompts, 3, 8)
+        single = [capture.greedy(model, p, 3, 8, "teacher_forced") for p in prompts]
+    assert batched == single
+
+
+def test_keep_positions_slices_after_the_full_forward(setup):
+    model, workload, base, tmp = setup
+    capture.forward({**base, "responses": str(tmp / "responses"), "output": str(tmp / "kept"),
+                     "keep_positions": 2})
+    full = load_file(str(io.case_file(tmp / "reference", "mmlu-0000", ".safetensors")))
+    kept = load_file(str(io.case_file(tmp / "kept", "mmlu-0000", ".safetensors")))
+    assert kept["logits"].shape[0] == 2 and torch.equal(kept["logits"], full["logits"][:2])

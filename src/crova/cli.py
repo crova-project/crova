@@ -10,6 +10,7 @@ from . import io
 
 CONFIG_COMMANDS = {
     "workload": ("crova.workload", "build", "select and tokenize train/development questions"),
+    "workload-extend": ("crova.workload", "extend", "grow a workload's training split"),
     "generate": ("crova.capture", "generate", "greedy responses"),
     "forward": ("crova.capture", "forward", "teacher-forced logits over given responses"),
     "compare": ("crova.capture", "compare", "pool reference-versus-target metrics"),
