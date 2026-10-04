@@ -200,6 +200,7 @@ def forward(config):
             io.write_json(target, stats)
         else:
             if config.get("topk"):
+                values.pop("router_logits", None)  # not needed for distillation targets
                 logprobs = values.pop("logits").float().log_softmax(-1)
                 top, index = logprobs.topk(config["topk"], dim=-1)
                 values.update(topk_logprob=top.contiguous(), topk_index=index.int().contiguous())
